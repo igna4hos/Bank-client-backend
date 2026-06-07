@@ -1,0 +1,41 @@
+networks:
+  bank-net:
+    external: true
+  backend-internal:
+    name: backend-internal
+
+services:
+  bank-postgres:
+    image: postgres:16-alpine
+    container_name: bank-postgres
+    restart: unless-stopped
+    networks:
+      - backend-internal
+    environment:
+      POSTGRES_DB: bank_users
+      POSTGRES_USER: bank
+      POSTGRES_PASSWORD: bank_pass
+    volumes:
+      - bank-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bank -d bank_users"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  bank-backend:
+    build: .
+    container_name: bank-backend
+    restart: unless-stopped
+    networks:
+      - backend-internal
+      - bank-net
+    ports:
+      - "8000:8000"
+    depends_on:
+      bank-postgres:
+        condition: service_healthy
+    env_file: .env
+
+volumes:
+  bank-postgres-data:
