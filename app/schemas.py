@@ -3,6 +3,8 @@ from typing import Optional
 from pydantic import BaseModel
 
 
+# ── Users ─────────────────────────────────────────────────────────────────────
+
 class UserCreate(BaseModel):
     telegram_nick: str
     chat_id: int
@@ -20,12 +22,24 @@ class UserResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class FunnelListResponse(BaseModel):
-    funnels: list[str]
+# ── Funnels ───────────────────────────────────────────────────────────────────
 
-
-class FunnelStats(BaseModel):
+class FunnelInfo(BaseModel):
     funnel_id: str
+    funnel_name: str
+    service_id: str
+    service_name: str
+    benchmark_duration_sec: float
+
+
+class FunnelListResponse(BaseModel):
+    funnels: list[FunnelInfo]
+
+
+# ── Daily friction ─────────────────────────────────────────────────────────────
+
+class DayFrictionStats(BaseModel):
+    date: str
     min_duration_sec: float
     avg_duration_sec: float
     median_duration_sec: float
@@ -33,5 +47,55 @@ class FunnelStats(BaseModel):
 
 
 class DailyFrictionResponse(BaseModel):
+    funnel_id: str
+    funnel_name: str
+    service_name: str
+    benchmark_duration_sec: float
+    stats: list[DayFrictionStats]
+
+
+# ── Services ──────────────────────────────────────────────────────────────────
+
+class ServiceInfo(BaseModel):
+    service_id: str
+    service_name: str
+    service_type: str
+
+
+class ServiceListResponse(BaseModel):
+    services: list[ServiceInfo]
+
+
+# ── Service usage ─────────────────────────────────────────────────────────────
+
+class ServiceUsageDayData(BaseModel):
     date: str
-    stats: list[FunnelStats]
+    session_count: int
+
+
+class ServiceUsageResponse(BaseModel):
+    service_name: str
+    days: int
+    data: list[ServiceUsageDayData]
+    median_sessions: float
+
+
+# ── Alerts ────────────────────────────────────────────────────────────────────
+
+class AlertInfo(BaseModel):
+    alert_id: str
+    detected_at: str
+    anomaly_type: str
+    metric_name: str
+    severity: str
+    details: str
+
+
+class AssignRequest(BaseModel):
+    alert_id: str
+    department: str
+
+
+class AssignResponse(BaseModel):
+    alert: AlertInfo
+    users: list[UserResponse]

@@ -9,7 +9,13 @@ from app.schemas import UserCreate, UserResponse
 router = APIRouter(prefix="/users", tags=["users"])
 
 
-@router.get("/{telegram_nick}", response_model=UserResponse, summary="Получить пользователя по нику")
+@router.get("/", response_model=list[UserResponse], summary="Список всех пользователей")
+async def list_users(db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(User))
+    return result.scalars().all()
+
+
+@router.get("/{telegram_nick}", response_model=UserResponse, summary="Найти пользователя по нику")
 async def get_user(telegram_nick: str, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(User).where(User.telegram_nick == telegram_nick))
     user = result.scalar_one_or_none()

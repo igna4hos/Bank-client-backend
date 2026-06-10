@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from app.database import Base, engine
-from app.routers import analytics, health, users
+from app.routers import alerts, analytics, health, users
 
 
 @asynccontextmanager
@@ -23,3 +23,4 @@ app = FastAPI(
 app.include_router(health.router)
 app.include_router(users.router)
 app.include_router(analytics.router)
+app.include_router(alerts.router)
