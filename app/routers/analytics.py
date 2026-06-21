@@ -1,3 +1,4 @@
+import asyncio
 import re
 import statistics
 from typing import Optional
@@ -162,7 +163,7 @@ async def get_service_usage(
 @router.post(
     "/query",
     response_model=QueryResponse,
-    summary="Выполнить произвольный SELECT-запрос (используется /ask)",
+    summary="Выполнить произвольный SELECT-запрос",
 )
 async def execute_query(payload: QueryRequest):
     sql = payload.sql.strip()
@@ -174,5 +175,53 @@ async def execute_query(payload: QueryRequest):
         result = await clickhouse_query_with_meta(sql)
     except Exception as e:
         raise HTTPException(status_code=422, detail=str(e))
-    result["rows"] = result["rows"][:100]  # cap to 100 rows
+    result["rows"] = result["rows"][:100]
     return QueryResponse(**result)
+
+
+@router.get("/businesses-by-industry", summary="Количество бизнесов и оборот по отраслям")
+async def get_businesses_by_industry():
+    counts, turnover = await asyncio.gather(
+        clickhouse_query("""
+            SELECT industry, count() AS cnt
+            FROM bank_marts.dim_businesses
+            GROUP BY industry
+            ORDER BY cnt DESC
+        """),
+        clickhouse_query("""
+            SELECT db.industry, round(sum(dt.inflow_sum), 2) AS total_inflow
+            FROM bank_marts.daily_turnover AS dt
+            JOIN bank_marts.dim_businesses AS db ON dt.business_id = db.business_id
+            GROUP BY db.industry
+            ORDER BY total_inflow DESC
+        """),
+    )
+    return {
+        "industry_counts": [{"industry": r[0], "count": int(r[1])} for r in counts],
+        "industry_turnover": [{"industry": r[0], "total_inflow": float(r[1])} for r in turnover],
+    }
+
+
+@router.get("/alerts/daily-summary", summary="Сводка аномалий за вчера (для утреннего отчёта)")
+async def get_alerts_daily_summary():
+    rows = await clickhouse_query("""
+        SELECT anomaly_type, severity, count() AS cnt
+        FROM bank_marts.anomaly_alerts
+        WHERE toDate(detected_at) = yesterday()
+        GROUP BY anomaly_type, severity
+        ORDER BY anomaly_type, severity
+    """)
+    by_type: dict[str, int] = {}
+    by_severity: dict[str, int] = {}
+    total = 0
+    for r in rows:
+        atype, sev, cnt = r[0], r[1], int(r[2])
+        by_type[atype] = by_type.get(atype, 0) + cnt
+        by_severity[sev] = by_severity.get(sev, 0) + cnt
+        total += cnt
+    return {
+        "date": "yesterday",
+        "total": total,
+        "by_type": [{"anomaly_type": k, "count": v} for k, v in sorted(by_type.items())],
+        "by_severity": [{"severity": k, "count": v} for k, v in sorted(by_severity.items())],
+    }

@@ -14,6 +14,10 @@ class Settings(BaseSettings):
     clickhouse_password: str = "bank_pass"
     clickhouse_db: str = "bank_marts"
 
+    yandex_folder_id: str = ""
+    yandex_api_key: str = ""
+    yandex_model: str = "yandexgpt-5.1/latest"
+
     model_config = {"env_file": ".env"}
 
     @property
