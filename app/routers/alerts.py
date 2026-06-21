@@ -94,6 +94,38 @@ async def stream_alerts(request: Request):
     return EventSourceResponse(generator())
 
 
+@router.get("/alerts/recent", summary="Новые аномалии начиная с указанного количества строк")
+async def get_recent_alerts(since_count: int = 0, limit: int = 3):
+    current_count = await _get_count()
+    new_n = current_count - since_count
+    alerts = []
+    if new_n > 0:
+        rows = await clickhouse_query(f"""
+            SELECT
+                toString(alert_id),
+                toString(detected_at),
+                anomaly_type,
+                metric_name,
+                severity,
+                details
+            FROM bank_marts.anomaly_alerts
+            ORDER BY detected_at DESC
+            LIMIT {min(new_n, limit)}
+        """)
+        alerts = [
+            {
+                "alert_id": r[0],
+                "detected_at_msk": _to_moscow(r[1]),
+                "anomaly_type": r[2],
+                "metric_name": r[3],
+                "severity": r[4],
+                "details": r[5],
+            }
+            for r in rows
+        ]
+    return {"total_count": current_count, "new_count": new_n, "alerts": alerts}
+
+
 @router.post("/alerts/assign", response_model=AssignResponse, summary="Назначить аномалию на департамент")
 async def assign_alert(payload: AssignRequest, db: AsyncSession = Depends(get_db)):
     alert = await _fetch_alert(payload.alert_id)
