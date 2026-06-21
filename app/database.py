@@ -17,7 +17,7 @@ async def get_db() -> AsyncSession:
         yield session
 
 
-async def clickhouse_query(query: str) -> list[list]:
+async def _ch_raw(query: str) -> dict:
     async with httpx.AsyncClient() as client:
         response = await client.post(
             f"http://{settings.clickhouse_host}:{settings.clickhouse_port}/",
@@ -31,4 +31,16 @@ async def clickhouse_query(query: str) -> list[list]:
             timeout=30.0,
         )
         response.raise_for_status()
-        return response.json()["data"]
+        return response.json()
+
+
+async def clickhouse_query(query: str) -> list[list]:
+    return (await _ch_raw(query))["data"]
+
+
+async def clickhouse_query_with_meta(query: str) -> dict:
+    raw = await _ch_raw(query)
+    return {
+        "columns": [col["name"] for col in raw.get("meta", [])],
+        "rows": raw["data"],
+    }

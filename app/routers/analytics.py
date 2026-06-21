@@ -1,20 +1,26 @@
+import re
 import statistics
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
 from rapidfuzz import fuzz, process
 
-from app.database import clickhouse_query
+from app.database import clickhouse_query, clickhouse_query_with_meta
 from app.schemas import (
     DailyFrictionResponse,
     DayFrictionStats,
     FunnelInfo,
     FunnelListResponse,
+    QueryRequest,
+    QueryResponse,
     ServiceInfo,
     ServiceListResponse,
     ServiceUsageDayData,
     ServiceUsageResponse,
 )
+
+_SELECT_RE = re.compile(r"^\s*SELECT\b", re.IGNORECASE)
+_DANGEROUS_RE = re.compile(r"\b(INSERT|UPDATE|DELETE|DROP|TRUNCATE|ALTER|CREATE|SYSTEM)\b", re.IGNORECASE)
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
 
@@ -151,3 +157,22 @@ async def get_service_usage(
         data=[ServiceUsageDayData(date=str(r[0]), session_count=int(r[1])) for r in rows],
         median_sessions=median_val,
     )
+
+
+@router.post(
+    "/query",
+    response_model=QueryResponse,
+    summary="Выполнить произвольный SELECT-запрос (используется /ask)",
+)
+async def execute_query(payload: QueryRequest):
+    sql = payload.sql.strip()
+    if not _SELECT_RE.match(sql):
+        raise HTTPException(status_code=400, detail="Разрешены только SELECT-запросы")
+    if _DANGEROUS_RE.search(sql):
+        raise HTTPException(status_code=400, detail="Запрос содержит запрещённые операторы")
+    try:
+        result = await clickhouse_query_with_meta(sql)
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    result["rows"] = result["rows"][:100]  # cap to 100 rows
+    return QueryResponse(**result)

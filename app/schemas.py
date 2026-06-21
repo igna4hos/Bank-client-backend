@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Any, Optional
 
 from pydantic import BaseModel
 
@@ -99,3 +99,14 @@ class AssignRequest(BaseModel):
 class AssignResponse(BaseModel):
     alert: AlertInfo
     users: list[UserResponse]
+
+
+# ── Ad-hoc query ──────────────────────────────────────────────────────────────
+
+class QueryRequest(BaseModel):
+    sql: str
+
+
+class QueryResponse(BaseModel):
+    columns: list[str]
+    rows: list[list[Any]]
