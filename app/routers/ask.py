@@ -15,7 +15,6 @@ _DANGEROUS_RE = re.compile(
     r"\b(INSERT|UPDATE|DELETE|DROP|TRUNCATE|ALTER|CREATE|SYSTEM)\b", re.IGNORECASE
 )
 
-# ── Схема всех таблиц (актуально по реальным колонкам ClickHouse) ────────────
 _SCHEMA = """
 Ты — аналитик данных банковской платформы. Работаешь с ClickHouse (база bank_marts).
 
@@ -60,10 +59,10 @@ bank_marts.client_friction_baseline — baseline UX-показателей кл�
 bank_marts.anomaly_alerts — алёрты об аномалиях (detected_at в UTC, Москва = UTC+3)
   alert_id UUID, detected_at DateTime,
   anomaly_type LowCardinality(String),
-  entity_type LowCardinality(String)  -- значения: 'business', 'client'
+  entity_type LowCardinality(String),  -- 'business' или 'client'
   entity_id UUID, metric_name String, metric_value Float64,
   baseline_mean Float64, baseline_std Float64, deviation_sigma Float64,
-  severity LowCardinality(String)  -- значения: 'low', 'medium', 'high', 'critical'
+  severity LowCardinality(String),  -- 'low', 'medium', 'high', 'critical'
   details String, is_resolved UInt8
 
 bank_marts.dim_businesses — справочник бизнесов (МСБ)
@@ -87,6 +86,8 @@ bank_marts.dim_funnels — справочник воронок (экранов �
   daily_service_usage.service_id → dim_services.service_id
   daily_friction_stats.funnel_id → dim_funnels.funnel_id
   dim_funnels.service_id → dim_services.service_id
+  anomaly_alerts.entity_id → dim_businesses.business_id (когда entity_type = 'business')
+  anomaly_alerts.entity_id → dim_clients.client_id (когда entity_type = 'client')
 
 ПРАВИЛА:
 - Верни ТОЛЬКО SQL-запрос, без пояснений, без markdown-блоков (не используй ```)
@@ -99,8 +100,6 @@ bank_marts.dim_funnels — справочник воронок (экранов �
 class AskRequest(BaseModel):
     question: str
 
-
-# ── YandexGPT helpers ─────────────────────────────────────────────────────────
 
 async def _gpt(messages: list[dict], temperature: float) -> str:
     payload = {
@@ -147,10 +146,7 @@ async def _generate_answer(question: str, sql: str, columns: list, rows: list) -
     note = f"\n(показаны первые 50 из {len(rows)} строк)" if len(rows) > 50 else ""
     return await _gpt(
         [
-            {
-                "role": "system",
-                "text": "Ты аналитик банковских данных. Отвечай кратко, по делу, на русском.",
-            },
+            {"role": "system", "text": "Ты аналитик банковских данных. Отвечай кратко, по делу, на русском."},
             {
                 "role": "user",
                 "text": (
@@ -165,8 +161,6 @@ async def _generate_answer(question: str, sql: str, columns: list, rows: list) -
     )
 
 
-# ── Endpoint ──────────────────────────────────────────────────────────────────
-
 @router.post("/", summary="Вопрос на естественном языке → SQL → аналитический ответ")
 async def ask(payload: AskRequest):
     if not settings.yandex_api_key:
@@ -178,7 +172,6 @@ async def ask(payload: AskRequest):
     if not _SELECT_RE.match(sql) or _DANGEROUS_RE.search(sql):
         raise HTTPException(status_code=422, detail=f"Модель сгенерировала недопустимый запрос: {sql}")
 
-    # Execute with one auto-fix attempt
     result = None
     last_error = ""
     for attempt in range(2):

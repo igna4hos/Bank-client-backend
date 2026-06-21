@@ -13,8 +13,6 @@ from app.schemas import AlertInfo, AssignRequest, AssignResponse
 
 router = APIRouter(prefix="/analytics", tags=["alerts"])
 
-_POLL_SECONDS = 5
-
 
 def _to_moscow(dt_str: str) -> str:
     try:
@@ -51,11 +49,10 @@ async def _fetch_alert(alert_id: str) -> AlertInfo | None:
     )
 
 
-@router.get("/alerts/stream", summary="SSE-поток новых аномалий (отслеживание по изменению количества строк)")
+@router.get("/alerts/stream", summary="SSE-поток новых аномалий")
 async def stream_alerts(request: Request):
     async def generator():
         last_count = await _get_count()
-
         while True:
             if await request.is_disconnected():
                 break
@@ -89,7 +86,7 @@ async def stream_alerts(request: Request):
                     last_count = current_count
             except Exception:
                 pass
-            await asyncio.sleep(_POLL_SECONDS)
+            await asyncio.sleep(5)
 
     return EventSourceResponse(generator())
 

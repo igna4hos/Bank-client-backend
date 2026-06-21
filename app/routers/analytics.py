@@ -26,8 +26,6 @@ _DANGEROUS_RE = re.compile(r"\b(INSERT|UPDATE|DELETE|DROP|TRUNCATE|ALTER|CREATE|
 router = APIRouter(prefix="/analytics", tags=["analytics"])
 
 
-# ── Internal helpers ──────────────────────────────────────────────────────────
-
 async def _fetch_funnels() -> list[FunnelInfo]:
     rows = await clickhouse_query("""
         SELECT
@@ -61,8 +59,6 @@ def _best_match(query: str, items: list, key: str) -> Optional[dict]:
     return None
 
 
-# ── Endpoints ─────────────────────────────────────────────────────────────────
-
 @router.get("/funnels", response_model=FunnelListResponse, summary="Список воронок с привязкой к сервису")
 async def get_funnels():
     return FunnelListResponse(funnels=await _fetch_funnels())
@@ -71,7 +67,7 @@ async def get_funnels():
 @router.get(
     "/daily-friction",
     response_model=DailyFrictionResponse,
-    summary="Статистика времени по воронке за сегодня и вчера (поиск по названию)",
+    summary="Статистика времени по воронке за сегодня и вчера",
 )
 async def get_daily_friction(
     funnel_name: str = Query(..., description="Название воронки (допускаются опечатки)"),
@@ -129,7 +125,7 @@ async def get_services():
 @router.get("/service-usage", response_model=ServiceUsageResponse, summary="Статистика использования сервиса по дням")
 async def get_service_usage(
     service_name: str = Query(..., description="Название сервиса"),
-    days: int = Query(10, ge=1, le=14, description="Количество дней (1-14, по умолчанию 10)"),
+    days: int = Query(10, ge=1, le=14, description="Количество дней (1-14)"),
 ):
     svc_rows = await clickhouse_query(
         "SELECT toString(service_id), service_name FROM bank_marts.dim_services WHERE is_active = 1"
@@ -160,11 +156,7 @@ async def get_service_usage(
     )
 
 
-@router.post(
-    "/query",
-    response_model=QueryResponse,
-    summary="Выполнить произвольный SELECT-запрос",
-)
+@router.post("/query", response_model=QueryResponse, summary="Выполнить произвольный SELECT-запрос")
 async def execute_query(payload: QueryRequest):
     sql = payload.sql.strip()
     if not _SELECT_RE.match(sql):
@@ -204,7 +196,7 @@ async def get_businesses_by_industry():
     }
 
 
-@router.get("/alerts/daily-summary", summary="Сводка аномалий за вчера (для утреннего отчёта)")
+@router.get("/alerts/daily-summary", summary="Сводка аномалий за вчера")
 async def get_alerts_daily_summary():
     rows = await clickhouse_query("""
         SELECT anomaly_type, severity, count() AS cnt
