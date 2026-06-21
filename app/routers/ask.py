@@ -15,70 +15,72 @@ _DANGEROUS_RE = re.compile(
     r"\b(INSERT|UPDATE|DELETE|DROP|TRUNCATE|ALTER|CREATE|SYSTEM)\b", re.IGNORECASE
 )
 
-# ── Схема всех таблиц (актуально по db_info.md) ──────────────────────────────
+# ── Схема всех таблиц (актуально по реальным колонкам ClickHouse) ────────────
 _SCHEMA = """
 Ты — аналитик данных банковской платформы. Работаешь с ClickHouse (база bank_marts).
 
 ТАБЛИЦЫ:
 
 bank_marts.daily_turnover — дневные обороты бизнесов (МСБ)
-  date Date, business_id UUID, inflow_sum Decimal(18,2), outflow_sum Decimal(18,2),
+  date Date, business_id UUID,
+  inflow_sum Decimal(18,2), outflow_sum Decimal(18,2),
   inflow_count UInt32, outflow_count UInt32, tx_count UInt32, avg_tx_amount Decimal(18,2),
   unique_counterparties UInt32, active_day UInt8, cash_withdrawal_sum Decimal(18,2),
   balance_avg Decimal(18,2), balance_min Decimal(18,2), balance_volatility Decimal(18,2)
 
 bank_marts.monthly_turnover — месячные обороты бизнесов
-  month Date, business_id UUID, inflow_sum Decimal(18,2), outflow_sum Decimal(18,2),
+  month Date, business_id UUID,
+  inflow_sum Decimal(18,2), outflow_sum Decimal(18,2),
   tx_count UInt32, avg_balance Decimal(18,2), unique_counterparties UInt32
 
-bank_marts.business_baseline — базовые показатели бизнесов (для детектора аномалий)
-  business_id UUID, baseline_period String (значения: '30d','90d'),
-  metric String, mean_value Float64, std_deviation Float64,
-  p25 Float64, p75 Float64, calculated_at DateTime
-
 bank_marts.daily_service_usage — использование сервисов клиентами по дням
-  date Date, client_id UUID, service_id UUID, session_count UInt32,
-  event_count UInt32, tx_sum Decimal(18,2), tx_count UInt32, cancel_count UInt32
+  date Date, client_id UUID, service_id UUID,
+  session_count UInt32, event_count UInt32, tx_sum Float64, tx_count UInt32, cancel_count UInt32
 
 bank_marts.monthly_service_usage — использование сервисов по месяцам
-  month Date, client_id UUID, service_id UUID, active_days UInt32,
-  session_count UInt32, tx_sum Decimal(18,2), unique_services_used UInt32
+  month Date, client_id UUID, service_id UUID,
+  active_days UInt32, session_count UInt32, tx_sum Float64, unique_services_used UInt32
 
-bank_marts.client_service_baseline — baseline использования сервисов
+bank_marts.client_service_baseline — baseline использования сервисов клиентами
   client_id UUID, baseline_period String, metric String,
   mean_value Float64, std_deviation Float64, p25 Float64, p75 Float64, calculated_at DateTime
 
 bank_marts.daily_friction_stats — UX-метрики воронок по дням
-  date Date, client_id UUID, funnel_id UUID, friction_event_count UInt32,
-  rage_click_count UInt32, idle_count UInt32, ui_error_count UInt32,
-  exit_without_action_count UInt32, session_count UInt32, completed_session_count UInt32,
+  date Date, client_id UUID, funnel_id UUID,
+  friction_event_count UInt32, rage_click_count UInt32, idle_count UInt32,
+  ui_error_count UInt32, exit_without_action_count UInt32,
+  session_count UInt32, completed_session_count UInt32,
   funnel_success_rate Float64, avg_task_duration_sec Float64,
   ux_tickets_count UInt32, is_active_day UInt8
 
-bank_marts.client_friction_baseline — baseline UX-показателей
+bank_marts.client_friction_baseline — baseline UX-показателей клиентов
   client_id UUID, baseline_period String, metric String,
   mean_value Float64, std_deviation Float64, p25 Float64, p75 Float64, calculated_at DateTime
 
-bank_marts.anomaly_alerts — алёрты об аномалиях (время UTC, Москва = UTC+3)
-  alert_id UUID, detected_at DateTime, anomaly_type LowCardinality(String),
-  entity_type LowCardinality(String) (значения: 'business','client'),
+bank_marts.anomaly_alerts — алёрты об аномалиях (detected_at в UTC, Москва = UTC+3)
+  alert_id UUID, detected_at DateTime,
+  anomaly_type LowCardinality(String),
+  entity_type LowCardinality(String)  -- значения: 'business', 'client'
   entity_id UUID, metric_name String, metric_value Float64,
   baseline_mean Float64, baseline_std Float64, deviation_sigma Float64,
-  severity LowCardinality(String) (значения: 'low','medium','high','critical'),
+  severity LowCardinality(String)  -- значения: 'low', 'medium', 'high', 'critical'
   details String, is_resolved UInt8
 
 bank_marts.dim_businesses — справочник бизнесов (МСБ)
-  business_id UUID, name String, inn String, industry String, region String, segment String
+  business_id UUID, company_name String, inn String, industry String,
+  segment String, region String, tax_regime String, current_tariff String,
+  is_active UInt8, synced_at DateTime
 
 bank_marts.dim_clients — справочник клиентов (физлица)
-  client_id UUID, name String, region String, segment String
+  client_id UUID, full_name String, segment String, region String,
+  primary_product String, subscription_plan String, is_active UInt8, synced_at DateTime
 
 bank_marts.dim_services — справочник сервисов экосистемы
   service_id UUID, service_name String, service_type String, is_active UInt8, synced_at DateTime
 
 bank_marts.dim_funnels — справочник воронок (экранов приложения)
   funnel_id UUID, funnel_name String, service_id UUID,
-  target_event String, benchmark_duration_sec Float64, is_active UInt8, synced_at DateTime
+  target_event String, benchmark_duration_sec UInt32, is_active UInt8, synced_at DateTime
 
 СВЯЗИ ДЛЯ JOIN:
   daily_turnover.business_id → dim_businesses.business_id

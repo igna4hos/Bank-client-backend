@@ -185,6 +185,7 @@ async def get_businesses_by_industry():
         clickhouse_query("""
             SELECT industry, count() AS cnt
             FROM bank_marts.dim_businesses
+            WHERE is_active = 1
             GROUP BY industry
             ORDER BY cnt DESC
         """),
@@ -192,6 +193,7 @@ async def get_businesses_by_industry():
             SELECT db.industry, round(sum(dt.inflow_sum), 2) AS total_inflow
             FROM bank_marts.daily_turnover AS dt
             JOIN bank_marts.dim_businesses AS db ON dt.business_id = db.business_id
+            WHERE db.is_active = 1
             GROUP BY db.industry
             ORDER BY total_inflow DESC
         """),
